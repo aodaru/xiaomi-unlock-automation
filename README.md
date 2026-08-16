@@ -36,12 +36,31 @@ Las cuentas bloqueadas y los estados desconocidos nunca conceden permiso de
 forma automática. Se conserva la solicitud `apply/bl-auth` permitida por la
 misión; no se ejecuta desbloqueo físico ni `fastboot`.
 
+## Artefactos y estados de la Fase 3
+
+Para cada ejecución válida se crea `<work-dir>/<job_id>/` (por defecto,
+`jobs/<job_id>/`). El directorio contiene únicamente:
+
+- `status.json`: fuente estructurada de estado, escrita atómicamente.
+- `output.log`: salida operativa redactada.
+- `process.pid`: PID auxiliar del proceso.
+
+`status.json` incluye `schema_version`, `job_id`, `state`, `exit_code`,
+`result`, `error`, `created_at`, `started_at`, `updated_at`, `timeout_at` y
+`finished_at`. Los estados son `starting`, `running`, `success`, `failed` y
+`timeout`; las transiciones finales no se reutilizan. Un `job_id` existente se
+rechaza para evitar que dos trabajos compartan artefactos.
+
+El límite se configura con `--timeout-seconds` y por defecto es de 26 horas.
+El estado `timeout` devuelve el código `40`. Los estados `success` y `failed`
+conservan, respectivamente, el resultado o el error redactado. El token no
+se persiste en ningún artefacto.
+
 ## Alcance de esta fase
 
 Esta entrega elimina toda interacción humana y las dependencias de archivos
-compartidos. No implementa `status.json`, `output.log`, `process.pid`, timeout
-persistente, n8n, Docker, SSH/tmux ni Playwright; esos elementos pertenecen a
-fases posteriores.
+compartidos. No implementa n8n, Docker, SSH/tmux ni Playwright; esos elementos
+pertenecen a fases posteriores.
 
 ## Arquitectura prevista
 

@@ -1,23 +1,22 @@
-"""Consulta no interactiva del permiso de desbloqueo Xiaomi.
-
-La interfaz de esta fase es exclusivamente CLI. Los artefactos persistentes
-(status.json, output.log y process.pid) pertenecen a la Fase 3 y no se crean
-en este módulo.
-"""
+"""Consulta no interactiva del permiso de desbloqueo Xiaomi."""
 
 import argparse
 import hashlib
 import json
 import math
+import os
 import random
 import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 EXIT_FUNCTIONAL = 10
 EXIT_CONFIGURATION = 20
 EXIT_SYSTEM = 30
+EXIT_TIMEOUT = 40
+DEFAULT_TIMEOUT_SECONDS = 26 * 60 * 60
 TIMESHIFT_MIN_MS = 0
 TIMESHIFT_MAX_MS = 86_400_000
 JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -37,6 +36,14 @@ class FunctionalError(RuntimeError):
 
 class RemoteError(RuntimeError):
     """Red, HTTP, JSON o respuesta remota no reconocida (código 30)."""
+
+
+class JobError(RuntimeError):
+    """Error al crear o persistir los artefactos de un trabajo."""
+
+
+class JobTimeout(TimeoutError):
+    """El trabajo superó su límite operativo."""
 
 
 def redact(value, token):
@@ -62,6 +69,71 @@ def validate_arguments(token, timeshift, job_id):
     return token, shift, job_id
 
 
+def utc_now():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+class JobArtifacts:
+    """Persistencia aislada y atómica de un trabajo."""
+
+    TRANSITIONS = {"starting": {"running", "failed"}, "running": {"success", "failed", "timeout"}}
+
+    def __init__(self, root, job_id, token):
+        self.token = token
+        self.root = Path(root).expanduser().resolve()
+        self.path = (self.root / job_id).resolve()
+        if self.path.parent != self.root:
+            raise JobError("ruta de trabajo inválida")
+        try:
+            self.path.mkdir(parents=True, exist_ok=False)
+        except FileExistsError as exc:
+            raise JobError("job_id ya existe") from exc
+        except OSError as exc:
+            raise JobError(f"no se pudo crear el directorio del trabajo: {exc}") from exc
+        self.status_path = self.path / "status.json"
+        self.log_path = self.path / "output.log"
+        self.pid_path = self.path / "process.pid"
+        self.status = None
+
+    def _atomic_write(self, path, content):
+        temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+        try:
+            temporary.write_text(content, encoding="utf-8")
+            temporary.replace(path)
+        except OSError as exc:
+            raise JobError(f"no se pudo escribir {path.name}: {exc}") from exc
+
+    def set_state(self, state, exit_code=None, result=None, error=None, timeout_at=None):
+        if self.status is not None and state not in self.TRANSITIONS.get(self.status["state"], set()):
+            raise JobError(f"transición inválida: {self.status['state']} -> {state}")
+        now = utc_now()
+        current = self.status or {}
+        self.status = {
+            "schema_version": 1,
+            "job_id": current.get("job_id", self.path.name),
+            "state": state,
+            "exit_code": exit_code,
+            "result": result,
+            "error": redact(error, self.token) if error else None,
+            "created_at": current.get("created_at", now),
+            "started_at": current.get("started_at", now),
+            "updated_at": now,
+            "timeout_at": timeout_at if timeout_at is not None else current.get("timeout_at"),
+            "finished_at": now if state in {"success", "failed", "timeout"} else None,
+        }
+        self._atomic_write(self.status_path, json.dumps(self.status, ensure_ascii=True, indent=2) + "\n")
+
+    def write_pid(self):
+        self._atomic_write(self.pid_path, f"{os.getpid()}\n")
+
+    def log(self, message):
+        try:
+            with self.log_path.open("a", encoding="utf-8") as stream:
+                stream.write(redact(message, self.token).rstrip() + "\n")
+        except OSError as exc:
+            raise JobError(f"no se pudo escribir output.log: {exc}") from exc
+
+
 def generate_device_id():
     return hashlib.sha1(f"{random.random()}-{time.time()}".encode()).hexdigest().upper()
 
@@ -79,16 +151,20 @@ def get_initial_beijing_time(ntplib_module, pytz_module):
     raise RemoteError(f"no se pudo sincronizar la hora: {last_error}")
 
 
-def wait_until_target_time(start_time, start_timestamp, timeshift_ms, sleep=time.sleep):
+def wait_until_target_time(start_time, start_timestamp, timeshift_ms, sleep=time.sleep,
+                           timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS, clock=time.time):
     target = (start_time + timedelta(days=1)).replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(milliseconds=timeshift_ms)
     while True:
-        current = start_time + timedelta(seconds=time.time() - start_timestamp)
+        elapsed = clock() - start_timestamp
+        if elapsed >= timeout_seconds:
+            raise JobTimeout("se alcanzó el límite operativo")
+        current = start_time + timedelta(seconds=elapsed)
         remaining = (target - current).total_seconds()
         if remaining <= 0:
             return
-        sleep(min(1.0, remaining))
+        sleep(min(1.0, remaining, timeout_seconds - elapsed))
 
 
 class HTTP11Session:
@@ -175,40 +251,85 @@ def build_parser():
     parser.add_argument("--token", help="token de servicio (nunca se muestra)")
     parser.add_argument("--timeshift", help="desfase en milisegundos, entre 0 y 86400000")
     parser.add_argument("--job-id", dest="job_id", help="identificador seguro del trabajo")
+    parser.add_argument("--work-dir", default="jobs", help="raíz de los artefactos por trabajo")
+    parser.add_argument("--timeout-seconds", default=str(DEFAULT_TIMEOUT_SECONDS),
+                        help="límite operativo en segundos")
     return parser
+
+
+def validate_timeout(value):
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError("timeout-seconds debe ser un número positivo") from exc
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ConfigurationError("timeout-seconds debe ser un número positivo")
+    return timeout
 
 
 def main(argv=None, dependencies=None):
     args = build_parser().parse_args(argv)
     try:
         token, timeshift, job_id = validate_arguments(args.token, args.timeshift, args.job_id)
+        timeout_seconds = validate_timeout(args.timeout_seconds)
     except ConfigurationError as exc:
         print(f"[configuración] {redact(exc, args.token)}", file=sys.stderr)
         return EXIT_CONFIGURATION
 
     try:
-        import ntplib
-        import pytz
-        import urllib3
-        deps = dependencies or (ntplib, pytz, urllib3)
+        artifacts = JobArtifacts(args.work_dir, job_id, token)
+        timeout_at = (datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)).isoformat(
+            timespec="seconds").replace("+00:00", "Z")
+        artifacts.set_state("starting", timeout_at=timeout_at)
+        artifacts.write_pid()
+        artifacts.log(f"job_id={job_id}: starting")
+    except JobError as exc:
+        print(f"job_id={job_id}: {redact(exc, token)}", file=sys.stderr)
+        return EXIT_SYSTEM
+
+    def finish(state, code, result=None, error=None):
+        artifacts.log(f"job_id={job_id}: {result or error or state}")
+        artifacts.set_state(state, exit_code=code, result=result, error=error)
+
+    try:
+        if dependencies is None:
+            import ntplib
+            import pytz
+            import urllib3
+            deps = (ntplib, pytz, urllib3)
+        else:
+            deps = dependencies
         session = HTTP11Session(deps[2])
         device_id = generate_device_id()
+        artifacts.set_state("running", timeout_at=timeout_at)
+        artifacts.log(f"job_id={job_id}: running")
         initial_status = check_unlock_status(session, token, device_id)
         if initial_status == "already_allowed":
+            finish("success", 0, result="already_allowed")
             print(f"job_id={job_id}: permiso ya concedido")
             return 0
         start = get_initial_beijing_time(deps[0], deps[1])
         start_timestamp = time.time()
-        wait_until_target_time(start, start_timestamp, timeshift)
+        wait_until_target_time(start, start_timestamp, timeshift, timeout_seconds=timeout_seconds)
         apply_unlock(session, token, device_id)
         # Se valida el estado final; un estado bloqueado nunca concede permiso.
         check_unlock_status(session, token, device_id)
+        finish("success", 0, result="applied")
         print(f"job_id={job_id}: permiso solicitado correctamente")
         return 0
+    except JobTimeout as exc:
+        finish("timeout", EXIT_TIMEOUT, error=redact(exc, token))
+        print(f"job_id={job_id}: {redact(exc, token)}", file=sys.stderr)
+        return EXIT_TIMEOUT
     except FunctionalError as exc:
+        finish("failed", EXIT_FUNCTIONAL, error=redact(exc, token))
         print(f"job_id={job_id}: {redact(exc, token)}", file=sys.stderr)
         return EXIT_FUNCTIONAL
     except (ConfigurationError, RemoteError, Exception) as exc:
+        try:
+            finish("failed", EXIT_SYSTEM, error=redact(exc, token))
+        except JobError:
+            pass
         print(f"job_id={job_id}: {redact(exc, token)}", file=sys.stderr)
         return EXIT_SYSTEM
 

@@ -2,29 +2,29 @@
 
 ## Estado de la fase
 
-**PENDIENTE**
+**EN VALIDACION**
 
 ## Criterios de exito
 
 ### 1. Contrato de estados
 
-- [ ] Cada ejecucion valida crea `status.json` con estado inicial `starting`.
-- [ ] `running` se persiste antes de la espera prolongada.
-- [ ] Una ejecucion correcta termina en `success` con resultado y codigo `0`.
-- [ ] Un rechazo funcional o error del motor termina en `failed` con detalle
+- [x] Cada ejecucion valida crea `status.json` con estado inicial `starting`.
+- [x] `running` se persiste antes de la espera prolongada.
+- [x] Una ejecucion correcta termina en `success` con resultado y codigo `0`.
+- [x] Un rechazo funcional o error del motor termina en `failed` con detalle
       redactado y el codigo correspondiente.
-- [ ] Una ejecucion que alcanza el limite termina en `timeout` con marcas de
+- [x] Una ejecucion que alcanza el limite termina en `timeout` con marcas de
       tiempo y codigo definido.
 - [ ] Las transiciones invalidas se rechazan sin corromper el ultimo estado.
 
 ### 2. Artefactos y aislamiento
 
-- [ ] Cada `job_id` valido tiene un directorio propio y no puede escapar de la
+- [x] Cada `job_id` valido tiene un directorio propio y no puede escapar de la
       raiz configurada mediante traversal.
-- [ ] `status.json`, `output.log` y `process.pid` se crean dentro del directorio
+- [x] `status.json`, `output.log` y `process.pid` se crean dentro del directorio
       correcto y no se comparten entre trabajos.
-- [ ] `status.json` siempre es JSON completo y legible por otro proceso.
-- [ ] Los artefactos no contienen el token completo ni credenciales.
+- [x] `status.json` siempre es JSON completo y legible por otro proceso.
+- [x] Los artefactos no contienen el token completo ni credenciales.
 - [ ] El contenido conserva `job_id`, `started_at` y el estado final necesario
       para una auditoria posterior.
 
@@ -33,7 +33,7 @@
 - [ ] La interfaz CLI de la Fase 2 conserva sus argumentos y validaciones.
 - [ ] Los casos `already_allowed`, permiso aplicado, token caducado, bloqueo,
       respuesta desconocida y error de red producen estados deterministas.
-- [ ] El timeout es configurable y su valor por defecto respeta la referencia
+- [x] El timeout es configurable y su valor por defecto respeta la referencia
       de 26 horas.
 - [ ] Un fallo de persistencia se reporta de forma segura y no se presenta como
       un `success` falso.
@@ -42,7 +42,7 @@
 
 - [ ] Las pruebas cubren estados finales, timeout y aislamiento de dos trabajos.
 - [ ] Las pruebas no requieren tokens reales, stdin ni acceso de red.
-- [ ] `README.md` documenta rutas, esquema, estados y codigos de salida.
+- [x] `README.md` documenta rutas, esquema, estados y codigos de salida.
 - [ ] La documentacion no incluye secretos reales ni contradice el roadmap.
 
 ## Como verificar
