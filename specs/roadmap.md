@@ -13,10 +13,10 @@ el apartado **Implementación por fases** del README como fuente de orden.
 
 ## Fase 2: Entrada no interactiva
 
-- [ ] Reemplazar la lectura de token por argumento o entrada explícita.
-- [ ] Reemplazar la lectura de timeshift por argumento o entrada explícita.
-- [ ] Eliminar todos los `input()` de confirmaciones y errores.
-- [ ] Validar token, timeshift y `job_id` antes de iniciar.
+- [x] Reemplazar la lectura de token por argumento o entrada explícita.
+- [x] Reemplazar la lectura de timeshift por argumento o entrada explícita.
+- [x] Eliminar toda interacción de confirmaciones y errores.
+- [x] Validar token, timeshift y `job_id` antes de iniciar.
 
 ## Fase 3: Estados y resultados del script
 
