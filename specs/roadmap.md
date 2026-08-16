@@ -20,12 +20,12 @@ el apartado **Implementación por fases** del README como fuente de orden.
 
 ## Fase 3: Estados y resultados del script
 
-- [ ] Crear el estado inicial `starting`.
-- [ ] Escribir `running` antes de la espera prolongada.
-- [ ] Escribir `success` con el resultado de la consulta.
-- [ ] Escribir `failed` con error y código de salida.
-- [ ] Escribir `timeout` cuando se alcance el límite.
-- [ ] Aislar `status.json`, `output.log` y `process.pid` por trabajo.
+- [x] Crear el estado inicial `starting`.
+- [x] Escribir `running` antes de la espera prolongada.
+- [x] Escribir `success` con el resultado de la consulta.
+- [x] Escribir `failed` con error y código de salida.
+- [x] Escribir `timeout` cuando se alcance el límite.
+- [x] Aislar `status.json`, `output.log` y `process.pid` por trabajo.
 
 ## Fase 4: Pruebas locales del motor
 

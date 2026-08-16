@@ -1,5 +1,7 @@
 import importlib.util
 import io
+import json
+import tempfile
 import unittest
 from unittest import mock
 from contextlib import redirect_stderr
@@ -93,6 +95,102 @@ class ResponseTests(unittest.TestCase):
             )
         self.assertEqual(result, 20)
         self.assertNotIn("secret-token", output.getvalue())
+
+
+class ArtifactTests(unittest.TestCase):
+    class HTTP:
+        Timeout = mock.Mock()
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def PoolManager(self, **kwargs):
+            response = mock.Mock()
+            response.status = 200
+            response.data = module.json.dumps(self.payload).encode()
+            response.release_conn = mock.Mock()
+            manager = mock.Mock()
+            manager.request.return_value = response
+            return manager
+
+    def run_job(self, payload, *extra):
+        with tempfile.TemporaryDirectory() as work_dir:
+            result = module.main(
+                ["--token", "secret-token", "--timeshift", "1", "--job-id", "job-1",
+                 "--work-dir", work_dir, *extra],
+                dependencies=(None, None, self.HTTP(payload)),
+            )
+            path = Path(work_dir) / "job-1"
+            status = json.loads((path / "status.json").read_text())
+            log = (path / "output.log").read_text()
+            pid_exists = (path / "process.pid").exists()
+            return result, status, log, pid_exists
+
+    def test_success_persists_isolated_artifacts(self):
+        result, status, log, pid_exists = self.run_job({"code": 0, "data": {"is_pass": 1}})
+        self.assertEqual(result, 0)
+        self.assertEqual(status["state"], "success")
+        self.assertEqual(status["result"], "already_allowed")
+        self.assertEqual(status["job_id"], "job-1")
+        self.assertTrue(pid_exists)
+        self.assertNotIn("secret-token", log)
+
+    def test_functional_failure_is_persisted_without_secret(self):
+        result, status, log, _ = self.run_job({"code": 100004})
+        self.assertEqual(result, module.EXIT_FUNCTIONAL)
+        self.assertEqual(status["state"], "failed")
+        self.assertEqual(status["exit_code"], module.EXIT_FUNCTIONAL)
+        self.assertNotIn("secret-token", json.dumps(status) + log)
+
+    def test_timeout_is_persisted(self):
+        with tempfile.TemporaryDirectory() as work_dir:
+            with mock.patch.object(module, "wait_until_target_time",
+                                   side_effect=module.JobTimeout("limit")), \
+                 mock.patch.object(module, "get_initial_beijing_time",
+                                   return_value=module.datetime.now(module.timezone.utc)):
+                result = module.main(
+                    ["--token", "secret-token", "--timeshift", "1", "--job-id", "job-timeout",
+                     "--work-dir", work_dir],
+                    dependencies=(mock.Mock(), mock.Mock(), self.HTTP(
+                        {"code": 0, "data": {"is_pass": 4, "button_state": 1}})),
+                )
+            path = Path(work_dir) / "job-timeout"
+            status = json.loads((path / "status.json").read_text())
+            self.assertEqual(result, module.EXIT_TIMEOUT)
+            self.assertEqual(status["state"], "timeout")
+            self.assertEqual(status["exit_code"], module.EXIT_TIMEOUT)
+
+    def test_existing_job_id_is_rejected(self):
+        with tempfile.TemporaryDirectory() as work_dir:
+            Path(work_dir, "job-1").mkdir()
+            result = module.main(
+                ["--token", "secret-token", "--timeshift", "1", "--job-id", "job-1",
+                 "--work-dir", work_dir],
+                dependencies=(None, None, self.HTTP({})),
+            )
+            self.assertEqual(result, module.EXIT_SYSTEM)
+
+    def test_two_jobs_do_not_share_artifacts(self):
+        with tempfile.TemporaryDirectory() as work_dir:
+            for job_id in ("job-a", "job-b"):
+                result = module.main(
+                    ["--token", "secret-token", "--timeshift", "1", "--job-id", job_id,
+                     "--work-dir", work_dir],
+                    dependencies=(None, None, self.HTTP({"code": 0, "data": {"is_pass": 1}})),
+                )
+                self.assertEqual(result, 0)
+            self.assertNotEqual(
+                (Path(work_dir) / "job-a" / "status.json").read_text(),
+                (Path(work_dir) / "job-b" / "status.json").read_text(),
+            )
+
+    def test_invalid_transition_is_rejected(self):
+        with tempfile.TemporaryDirectory() as work_dir:
+            artifacts = module.JobArtifacts(work_dir, "job-1", "secret-token")
+            artifacts.set_state("starting")
+            artifacts.set_state("running")
+            with self.assertRaises(module.JobError):
+                artifacts.set_state("starting")
 
 
 if __name__ == "__main__":
