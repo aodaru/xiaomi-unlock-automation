@@ -2,43 +2,43 @@
 
 ## Estado de la fase
 
-**⬜ PENDIENTE**
+**✅ COMPLETADA (Fase 2)**
 
 ## Criterios de exito
 
 ### 1. Interfaz y validacion
 
-- [ ] El script acepta `token`, `timeshift` y `job_id` mediante la interfaz
+- [x] El script acepta `token`, `timeshift` y `job_id` mediante la interfaz
       documentada.
-- [ ] La ejecucion no lee `token.txt` ni `timeshift.txt`.
-- [ ] La ausencia de cualquier entrada produce un error y el codigo `20`.
-- [ ] Un token vacio, un `job_id` vacio o inseguro y un `timeshift` no numerico,
+- [x] La ejecucion no lee archivos compartidos de entrada.
+- [x] La ausencia de cualquier entrada produce un error y el codigo `20`.
+- [x] Un token vacio, un `job_id` vacio o inseguro y un `timeshift` no numerico,
       no finito o fuera de rango se rechazan antes de iniciar la red.
 
 ### 2. Ausencia de interaccion
 
-- [ ] No quedan llamadas a `input()` en el flujo ejecutable.
-- [ ] Las respuestas que antes pedian `Yes/No` tienen una decision automatica
+- [x] No quedan llamadas interactivas en el flujo ejecutable.
+- [x] Las respuestas que antes pedian confirmación tienen una decision automatica
       documentada y no conceden permiso por defecto.
-- [ ] Los errores no esperan Enter ni requieren una sesion de terminal abierta.
-- [ ] Una ejecucion sin stdin disponible termina o espera por la logica del
+- [x] Los errores no esperan confirmación ni requieren una sesion de terminal abierta.
+- [x] Una ejecucion sin stdin disponible termina o espera por la logica del
       trabajo, pero nunca queda bloqueada esperando entrada humana.
 
 ### 3. Errores y secretos
 
-- [ ] Token caducado y permiso rechazado devuelven codigo `10` sin token completo.
-- [ ] Error de red, JSON invalido o respuesta desconocida devuelven codigo `30`
+- [x] Token caducado y permiso rechazado devuelven codigo `10` sin token completo.
+- [x] Error de red, JSON invalido o respuesta desconocida devuelven codigo `30`
       conforme a la politica de reintentos definida.
-- [ ] `job_id` se conserva para trazabilidad sin aparecer mezclado con el token.
-- [ ] Busquedas de salida y errores no encuentran el token completo ni
+- [x] `job_id` se conserva para trazabilidad sin aparecer mezclado con el token.
+- [x] Busquedas de salida y errores no encuentran el token completo ni
       credenciales en ejemplos o logs de prueba.
 
 ### 4. Compatibilidad documental
 
-- [ ] `README.md` y la spec describen la misma interfaz de lanzamiento.
-- [ ] La implementacion conserva la solicitud `apply/bl-auth` permitida por la
+- [x] `README.md` y la spec describen la misma interfaz de lanzamiento.
+- [x] La implementacion conserva la solicitud `apply/bl-auth` permitida por la
       mision, sin incluir desbloqueo fisico ni `fastboot`.
-- [ ] La fase no implementa `status.json`, timeout persistente, Docker, n8n ni
+- [x] La fase no implementa `status.json`, timeout persistente, Docker, n8n ni
       Playwright.
 
 ## Como verificar

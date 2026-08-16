@@ -1,297 +1,217 @@
-import subprocess
-import sys
-import os
-import platform
+"""Consulta no interactiva del permiso de desbloqueo Xiaomi.
 
-# Listas de servidores
-ntp_servers = [
-    "ntp0.ntp-servers.net", "ntp1.ntp-servers.net", "ntp2.ntp-servers.net",
-    "ntp3.ntp-servers.net", "ntp4.ntp-servers.net", "ntp5.ntp-servers.net",
-    "ntp6.ntp-servers.net"
-]
+La interfaz de esta fase es exclusivamente CLI. Los artefactos persistentes
+(status.json, output.log y process.pid) pertenecen a la Fase 3 y no se crean
+en este módulo.
+"""
 
-MI_SERVERS = ['161.117.96.161', '20.157.18.26']
-
-# Instalación de dependencias
-def install_package(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-required_packages = ["requests", "ntplib", "pytz", "urllib3", "icmplib", "colorama", "linecache"]
-for package in required_packages:
-    try:
-        __import__(package)
-    except ImportError:
-        print(f"Instalando paquete {package}...")
-        install_package(package)
-
-os.system('cls' if os.name == 'nt' else 'clear')
-
+import argparse
 import hashlib
-import linecache
-import random
-import time
-from datetime import datetime, timezone, timedelta
-import ntplib
-import pytz
-import urllib3
 import json
-import statistics
-from icmplib import ping
-from colorama import init, Fore, Style
+import math
+import random
+import re
+import sys
+import time
+from datetime import datetime, timedelta, timezone
 
-# Configuración de colores
-init(autoreset=True)
-col_g = Fore.GREEN #зеленый
-col_gb = Style.BRIGHT + Fore.GREEN #ярко-зеленый
-col_b = Fore.BLUE #синий
-col_bb = Style.BRIGHT + Fore.BLUE #ярко-синий
-col_y = Fore.YELLOW #желтый
-col_yb = Style.BRIGHT + Fore.YELLOW #ярко-желтый
-col_r = Fore.RED #красный
-col_rb = Style.BRIGHT + Fore.RED #ярко-красный
+EXIT_FUNCTIONAL = 10
+EXIT_CONFIGURATION = 20
+EXIT_SYSTEM = 30
+TIMESHIFT_MIN_MS = 0
+TIMESHIFT_MAX_MS = 86_400_000
+JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-# Versión y número de token
-token_number = int(input(col_g + f"[Número de línea del token]: " + Fore.RESET))
-os.system('cls' if os.name == 'nt' else 'clear')
-#token_number = 1
-scriptversion = "ARU_FHL_v070425"
+NTP_SERVERS = [f"ntp{i}.ntp-servers.net" for i in range(7)]
+APPLY_URL = "https://sgp-api.buy.mi.com/bbs/api/global/apply/bl-auth"
+STATE_URL = "https://sgp-api.buy.mi.com/bbs/api/global/user/bl-switch/state"
 
-# Variables globales
-print(col_yb + f"{scriptversion}_токен_#{token_number}:")
-print (col_y + f"Verificando estado de la cuenta" + Fore.RESET)
-token = linecache.getline("token.txt" , token_number).strip ()
-cookie_value = token
-feedtime = float(linecache.getline("timeshift.txt" , token_number).strip ())
-feed_time_shift = feedtime
-feed_time_shift_1 = feed_time_shift / 1000
 
-# Genera un identificador único de dispositivo
-def generate_device_id():
-    random_data = f"{random.random()}-{time.time()}"
-    device_id = hashlib.sha1(random_data.encode('utf-8')).hexdigest().upper()
-    return device_id
+class ConfigurationError(ValueError):
+    """Entrada o configuración inválida (código 20)."""
 
-# Obtiene la hora actual de Pekín desde NTP
-def get_initial_beijing_time():
-    client = ntplib.NTPClient()
-    beijing_tz = pytz.timezone("Asia/Shanghai")
-    for server in ntp_servers:
-        try:
-            print(col_y + f"\nObteniendo hora actual en Pekín" + Fore.RESET)
-            response = client.request(server, version=3)
-            ntp_time = datetime.fromtimestamp(response.tx_time, timezone.utc)
-            beijing_time = ntp_time.astimezone(beijing_tz)
-            print(col_g + f"[Hora en Pekín]: " + Fore.RESET +  f"{beijing_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
-            return beijing_time
-        except Exception as e:
-            print(f"Error al conectar con {server}: {e}")
-    print(f"No se pudo conectar a ningún servidor NTP.")
-    return None
 
-# Sincroniza la hora de Pekín
-def get_synchronized_beijing_time(start_beijing_time, start_timestamp):
-    elapsed = time.time() - start_timestamp
-    current_time = start_beijing_time + timedelta(seconds=elapsed)
-    return current_time
+class FunctionalError(RuntimeError):
+    """Respuesta válida que impide continuar (código 10)."""
 
-# Espera hasta la hora objetivo teniendo en cuenta el ping
-def wait_until_target_time(start_beijing_time, start_timestamp):
-    next_day = start_beijing_time + timedelta(days=1)
-    print(col_y + f"\nSolicitud para desbloqueo del bootloader" + Fore.RESET)
-    print (col_g + f"[Desfase establecido]: " + Fore.RESET + f"{feed_time_shift:.2f} мс.")
-    target_time = next_day.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=feed_time_shift_1)
-    print(col_g + f"[Esperando hasta]: " + Fore.RESET + f"{target_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
-    print(f"No cierre esta ventana...")
-    
-    while True:
-        current_time = get_synchronized_beijing_time(start_beijing_time, start_timestamp)
-        time_diff = target_time - current_time
-        
-        if time_diff.total_seconds() > 1:
-            time.sleep(min(1.0, time_diff.total_seconds() - 1))
-        elif current_time >= target_time:
-            print(f"Время достигнуто: {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}. Начинаем отправку запросов...")
-            break
-        else:
-            time.sleep(0.0001)
 
-# Verifica si es posible el desbloqueo de la cuenta a través de la API
-def check_unlock_status(session, cookie_value, device_id):
+class RemoteError(RuntimeError):
+    """Red, HTTP, JSON o respuesta remota no reconocida (código 30)."""
+
+
+def redact(value, token):
+    """Redacta el secreto también cuando aparece dentro de una excepción."""
+    text = str(value)
+    return text.replace(token, "[REDACTED]") if token else text
+
+
+def validate_arguments(token, timeshift, job_id):
+    if not isinstance(token, str) or not token.strip() or any(ord(c) < 32 for c in token):
+        raise ConfigurationError("token ausente o inválido (token=[REDACTED])")
+    if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+        raise ConfigurationError("job_id ausente o inseguro")
     try:
-        url = "https://sgp-api.buy.mi.com/bbs/api/global/user/bl-switch/state"
-        headers = {
-            "Cookie": f"new_bbs_serviceToken={cookie_value};versionCode=500411;versionName=5.4.11;deviceId={device_id};"
-        }
-        
-        response = session.make_request('GET', url, headers=headers)
-        if response is None:
-            print(f"[Error] No se pudo obtener el estado de desbloqueo.")
-            return False
+        shift = float(timeshift)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError("timeshift debe ser un número finito en milisegundos") from exc
+    if not math.isfinite(shift) or not TIMESHIFT_MIN_MS <= shift <= TIMESHIFT_MAX_MS:
+        raise ConfigurationError(
+            f"timeshift debe estar entre {TIMESHIFT_MIN_MS:g} y "
+            f"{TIMESHIFT_MAX_MS:g} milisegundos"
+        )
+    return token, shift, job_id
 
-        response_data = json.loads(response.data.decode('utf-8'))
-        response.release_conn()
 
-        if response_data.get("code") == 100004:
-            print(f"[Error] La cookie ha expirado, necesita actualizarse.")
-            input(f"Presione Enter para cerrar...")
-            exit()
+def generate_device_id():
+    return hashlib.sha1(f"{random.random()}-{time.time()}".encode()).hexdigest().upper()
 
-        data = response_data.get("data", {})
-        is_pass = data.get("is_pass")
-        button_state = data.get("button_state")
-        deadline_format = data.get("deadline_format", "")
 
-        if is_pass == 4:
-            if button_state == 1:
-                    print(col_g + f"[Estado de la cuenta]: " + Fore.RESET + f"es posible enviar la solicitud..")
-                    return True
+def get_initial_beijing_time(ntplib_module, pytz_module):
+    client = ntplib_module.NTPClient()
+    beijing_tz = pytz_module.timezone("Asia/Shanghai")
+    last_error = None
+    for server in NTP_SERVERS:
+        try:
+            response = client.request(server, version=3)
+            return datetime.fromtimestamp(response.tx_time, timezone.utc).astimezone(beijing_tz)
+        except Exception as exc:  # NTP server failover is intentional.
+            last_error = exc
+    raise RemoteError(f"no se pudo sincronizar la hora: {last_error}")
 
-            elif button_state == 2:
-                print(col_g + f"[Estado de la cuenta]: " + Fore.RESET + f"bloqueo para enviar solicitudes hasta " f"{deadline_format} (Месяц/День).")
-                status_2 = (input(f"Продолжить (" + col_b + f"Yes/No" +Fore.RESET + f")?: ") )
-                if (status_2 == 'y' or status_2 == 'Y' or status_2 == 'yes' or status_2 == 'Yes' or status_2 == 'YES'):
-                    return True
-                else:
-                    input(f"Presione Enter para cerrar...")
-                    exit()
-            elif button_state == 3:
-                print(col_g + f"[Estado de la cuenta]: " + Fore.RESET + f"la cuenta fue creada hace menos de 30 días..")
-                status_3 = (input(f"Продолжить (" + col_b + f"Yes/No" +Fore.RESET + f")?: ") )
-                if (status_3 == 'y' or status_3 == 'Y' or status_3 == 'yes' or status_3 == 'Yes' or status_3 == 'YES'):
-                    return True
-                else:
-                    input(f"Presione Enter para cerrar...")
-                    exit()
-        elif is_pass == 1:
-            print(col_g + f"[Estado de la cuenta]: " + Fore.RESET + f"la solicitud fue aprobada, el desbloqueo es posible hasta " f"{deadline_format}.")
-            input(f"Presione Enter para cerrar...")
-            exit()
-        else:
-            print(col_g + f"[Estado de la cuenta]: " + Fore.RESET + f"estado desconocido.")
-            input(f"Presione Enter para cerrar...")
-            exit()
-    except Exception as e:
-        print(f"[Error проверки статуса] {e}")
-        return False
 
-# Contenedor para trabajar con solicitudes HTTP
+def wait_until_target_time(start_time, start_timestamp, timeshift_ms, sleep=time.sleep):
+    target = (start_time + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ) - timedelta(milliseconds=timeshift_ms)
+    while True:
+        current = start_time + timedelta(seconds=time.time() - start_timestamp)
+        remaining = (target - current).total_seconds()
+        if remaining <= 0:
+            return
+        sleep(min(1.0, remaining))
+
+
 class HTTP11Session:
-    def __init__(self):
-        self.http = urllib3.PoolManager(
-            maxsize=10,
-            retries=True,
-            timeout=urllib3.Timeout(connect=2.0, read=15.0),
-            headers={}
+    def __init__(self, urllib3_module):
+        self.http = urllib3_module.PoolManager(
+            maxsize=10, retries=True,
+            timeout=urllib3_module.Timeout(connect=2.0, read=15.0), headers={}
         )
 
     def make_request(self, method, url, headers=None, body=None):
+        request_headers = dict(headers or {})
+        request_headers["Content-Type"] = "application/json; charset=utf-8"
+        if method == "POST":
+            body = body if body is not None else b'{"is_retry":true}'
+            request_headers.update({
+                "Content-Length": str(len(body)), "Accept-Encoding": "gzip, deflate, br",
+                "User-Agent": "okhttp/4.12.0", "Connection": "keep-alive",
+            })
         try:
-            request_headers = {}
-            if headers:
-                request_headers.update(headers)
-                request_headers['Content-Type'] = 'application/json; charset=utf-8'
-            
-            if method == 'POST':
-                if body is None:
-                    body = '{"is_retry":true}'.encode('utf-8')
-                request_headers['Content-Length'] = str(len(body))
-                request_headers['Accept-Encoding'] = 'gzip, deflate, br'
-                request_headers['User-Agent'] = 'okhttp/4.12.0'
-                request_headers['Connection'] = 'keep-alive'
-            
-            response = self.http.request(
-                method,
-                url,
-                headers=request_headers,
-                body=body,
-                preload_content=False
-            )
-            
+            response = self.http.request(method, url, headers=request_headers,
+                                         body=body, preload_content=False)
+            if getattr(response, "status", 200) >= 400:
+                raise RemoteError(f"HTTP {response.status}")
             return response
-        except Exception as e:
-            print(f"[Error сети] {e}")
-            return None
- 
-def main():
-        
-    device_id = generate_device_id()
-    session = HTTP11Session()
+        except RemoteError:
+            raise
+        except Exception as exc:
+            raise RemoteError(f"error de red: {exc}") from exc
 
-    if check_unlock_status(session, cookie_value, device_id):
-        start_beijing_time = get_initial_beijing_time()
-        if start_beijing_time is None:
-            print(f"Не удалось установить начальное время. Presione Enter para cerrar...")
-            input()
-            exit()
 
+def decode_response(response, token):
+    try:
+        raw = response.data
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError, TypeError, AttributeError) as exc:
+        raise RemoteError(f"JSON inválido: {redact(exc, token)}") from exc
+    finally:
+        release = getattr(response, "release_conn", None)
+        if release:
+            release()
+
+
+def check_unlock_status(session, token, device_id):
+    headers = {"Cookie": f"new_bbs_serviceToken={token};versionCode=500411;"
+                         f"versionName=5.4.11;deviceId={device_id};"}
+    response = session.make_request("GET", STATE_URL, headers=headers)
+    payload = decode_response(response, token)
+    if payload.get("code") == 100004:
+        raise FunctionalError("token caducado")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise RemoteError("respuesta de estado desconocida")
+    is_pass, button = data.get("is_pass"), data.get("button_state")
+    if is_pass == 4 and button == 1:
+        return "allowed"
+    if is_pass == 4 and button in (2, 3):
+        deadline = data.get("deadline_format") or "fecha no indicada"
+        cause = "cuenta demasiado nueva" if button == 3 else "cuenta bloqueada"
+        raise FunctionalError(f"{cause}; permiso rechazado hasta {deadline}")
+    if is_pass == 1:
+        return "already_allowed"
+    raise RemoteError("estado de cuenta desconocido")
+
+
+def apply_unlock(session, token, device_id):
+    headers = {"Cookie": f"new_bbs_serviceToken={token};versionCode=500411;"
+                         f"versionName=5.4.11;deviceId={device_id};"}
+    payload = decode_response(session.make_request("POST", APPLY_URL, headers=headers), token)
+    code, data = payload.get("code"), payload.get("data")
+    if code == 0 and isinstance(data, dict) and data.get("apply_result") == 1:
+        return "applied"
+    if code == 0 and isinstance(data, dict) and data.get("apply_result") in (3, 4):
+        deadline = data.get("deadline_format") or "fecha no indicada"
+        raise FunctionalError(f"solicitud bloqueada hasta {deadline}")
+    if code == 100001:
+        raise FunctionalError("permiso rechazado")
+    if code == 100003:
+        return "applied"
+    raise RemoteError("respuesta de solicitud desconocida")
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Consulta no interactiva de permiso Xiaomi")
+    parser.add_argument("--token", help="token de servicio (nunca se muestra)")
+    parser.add_argument("--timeshift", help="desfase en milisegundos, entre 0 y 86400000")
+    parser.add_argument("--job-id", dest="job_id", help="identificador seguro del trabajo")
+    return parser
+
+
+def main(argv=None, dependencies=None):
+    args = build_parser().parse_args(argv)
+    try:
+        token, timeshift, job_id = validate_arguments(args.token, args.timeshift, args.job_id)
+    except ConfigurationError as exc:
+        print(f"[configuración] {redact(exc, args.token)}", file=sys.stderr)
+        return EXIT_CONFIGURATION
+
+    try:
+        import ntplib
+        import pytz
+        import urllib3
+        deps = dependencies or (ntplib, pytz, urllib3)
+        session = HTTP11Session(deps[2])
+        device_id = generate_device_id()
+        initial_status = check_unlock_status(session, token, device_id)
+        if initial_status == "already_allowed":
+            print(f"job_id={job_id}: permiso ya concedido")
+            return 0
+        start = get_initial_beijing_time(deps[0], deps[1])
         start_timestamp = time.time()
-        
-        wait_until_target_time(start_beijing_time, start_timestamp)
+        wait_until_target_time(start, start_timestamp, timeshift)
+        apply_unlock(session, token, device_id)
+        # Se valida el estado final; un estado bloqueado nunca concede permiso.
+        check_unlock_status(session, token, device_id)
+        print(f"job_id={job_id}: permiso solicitado correctamente")
+        return 0
+    except FunctionalError as exc:
+        print(f"job_id={job_id}: {redact(exc, token)}", file=sys.stderr)
+        return EXIT_FUNCTIONAL
+    except (ConfigurationError, RemoteError, Exception) as exc:
+        print(f"job_id={job_id}: {redact(exc, token)}", file=sys.stderr)
+        return EXIT_SYSTEM
 
-        url = "https://sgp-api.buy.mi.com/bbs/api/global/apply/bl-auth"
-        headers = {
-            "Cookie": f"new_bbs_serviceToken={cookie_value};versionCode=500411;versionName=5.4.11;deviceId={device_id};"
-        }
-
-        try:
-            while True:
-                request_time = get_synchronized_beijing_time(start_beijing_time, start_timestamp)
-                print(col_g + f"[Solicitud]: " + Fore.RESET + f"Enviando solicitud a las {request_time.strftime('%Y-%m-%d %H:%M:%S.%f')} (UTC+8)")
-                
-                response = session.make_request('POST', url, headers=headers)
-                if response is None:
-                    continue
-
-                response_time = get_synchronized_beijing_time(start_beijing_time, start_timestamp)
-                print(col_g + f"[Respuesta]: " + Fore.RESET + f"Respuesta получен в {response_time.strftime('%Y-%m-%d %H:%M:%S.%f')} (UTC+8)")
-
-                try:
-                    response_data = response.data
-                    response.release_conn()
-                    json_response = json.loads(response_data.decode('utf-8'))
-                    code = json_response.get("code")
-                    data = json_response.get("data", {})
-
-                    if code == 0:
-                        apply_result = data.get("apply_result")
-                        if apply_result == 1:
-                            print(col_g + f"[Статус]: " + Fore.RESET + f"La solicitud fue aprobada, verificando estado...")
-                            check_unlock_status(session, cookie_value, device_id)
-                        elif apply_result == 3:
-                            deadline_format = data.get("deadline_format", "Не указано")
-                            print(col_g + f"[Статус]: " + Fore.RESET + f"La solicitud no fue enviada, se alcanzó el límite. Intente de nuevo el {deadline_format} (Месяц/День).")
-                            input(f"Presione Enter para cerrar...")
-                            exit()
-                        elif apply_result == 4:
-                            deadline_format = data.get("deadline_format", "Не указано")
-                            print(col_g + f"[Статус]: " + Fore.RESET + f"La solicitud no fue enviada, se impuso un bloqueo hasta {deadline_format} (Месяц/День).")
-                            input(f"Presione Enter para cerrar...")
-                            exit()
-                    elif code == 100001:
-                        print(col_g + f"[Статус]: " + Fore.RESET + f"La solicitud fue rechazada, error en la petición..")
-                        print(col_g + f"[ПОЛНЫЙ ОТВЕТ]: " + Fore.RESET + f"{json_response}")
-                    elif code == 100003:
-                        print(col_g + f"[Статус]: " + Fore.RESET + f"La solicitud puede haber sido aprobada, verificando estado...")
-                        print(col_g + f"[Полный ответ]: " + Fore.RESET + f"{json_response}")
-                        check_unlock_status(session, cookie_value, device_id)
-                    elif code is not None:
-                        print(col_g + f"[Статус]: " + Fore.RESET + f"Estado desconocido de la solicitud: {code}")
-                        print(col_g + f"[Полный ответ]: " + Fore.RESET + f"{json_response}")
-                    else:
-                        print(col_g + f"[Error]: " + Fore.RESET + f"Respuesta не содержит необходимого кода.")
-                        print(col_g + f"[Полный ответ]: " + Fore.RESET + f"{json_response}")
-
-                except json.JSONDecodeError:
-                    print(col_g + f"[Error]: " + Fore.RESET + f"No se pudo decodificar el JSON de la respuesta..")
-                    print(col_g + f"[Respuesta сервера]: " + Fore.RESET + f"{response_data}")
-                except Exception as e:
-                    print(col_g + f"[Error обработки ответа]: " + Fore.RESET + f"{e}")
-                    continue
-
-        except Exception as e:
-            print(col_g + f"[Error запроса]: " + Fore.RESET + f"{e}")
-            input(f"Presione Enter para cerrar...")
-            exit()
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
