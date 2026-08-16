@@ -56,6 +56,27 @@ El estado `timeout` devuelve el código `40`. Los estados `success` y `failed`
 conservan, respectivamente, el resultado o el error redactado. El token no
 se persiste en ningún artefacto.
 
+## Fase 4: pruebas locales del motor
+
+La suite de `tests/test_cli.py` usa respuestas HTTP, reloj, espera y directorios
+temporales controlados. No usa stdin, tokens reales, red, Xiaomi ni archivos
+compartidos. Cubre validaciones CLI, respuestas funcionales y errores de
+transporte, la consulta posterior de `code=100003`, estados persistidos,
+timeout `40`, redacción del token, aislamiento concurrente y fallos de
+persistencia sin `success` falso.
+
+Ejecutar la verificación local:
+
+```bash
+python3 -m py_compile SCRIPT_PERMISO_DESBLOQUEO.py
+python3 SCRIPT_PERMISO_DESBLOQUEO.py --help
+python3 -m unittest discover -s tests -v
+```
+
+Las pruebas no validan disponibilidad, rendimiento ni compatibilidad de la
+infraestructura remota. Docker, SSH, tmux, n8n, Data Table y Playwright
+permanecen fuera de esta fase.
+
 ## Alcance de esta fase
 
 Esta entrega elimina toda interacción humana y las dependencias de archivos
@@ -65,7 +86,8 @@ pertenecen a fases posteriores.
 ## Arquitectura prevista
 
 n8n recibirá los secretos, generará un `job_id` por trabajo y lanzará este CLI
-por SSH. La persistencia y el monitor se añadirán en Fase 3/4.
+por SSH. El contenedor y el lanzamiento remoto se abordarán en la Fase 5; el
+workflow y el monitor se abordarán en las fases 6 y 7.
 
 ## Verificación local
 
