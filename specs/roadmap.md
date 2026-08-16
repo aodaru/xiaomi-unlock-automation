@@ -29,10 +29,10 @@ el apartado **Implementación por fases** del README como fuente de orden.
 
 ## Fase 4: Pruebas locales del motor
 
-- [ ] Probar ejecución sin interacción humana.
-- [ ] Probar token caducado y estados no permitidos.
-- [ ] Probar error de red y respuestas inválidas.
-- [ ] Probar finalización correcta y códigos de salida.
+- [x] Probar ejecución sin interacción humana.
+- [x] Probar token caducado y estados no permitidos.
+- [x] Probar error de red y respuestas inválidas.
+- [x] Probar finalización correcta y códigos de salida.
 
 ## Fase 5: Contenedor reproducible
 
