@@ -6,10 +6,10 @@ el apartado **Implementación por fases** del README como fuente de orden.
 
 ## Fase 1: Contrato y diagnóstico del script
 
-- [ ] Documentar argumentos `token`, `timeshift` y `job_id`.
-- [ ] Documentar el esquema de `status.json` y los códigos de salida.
-- [ ] Clasificar las respuestas conocidas de la API Xiaomi.
-- [ ] Definir el límite máximo y las transiciones de estado.
+- [x] Documentar argumentos `token`, `timeshift` y `job_id`.
+- [x] Documentar el esquema de `status.json` y los códigos de salida.
+- [x] Clasificar las respuestas conocidas de la API Xiaomi.
+- [x] Definir el límite máximo y las transiciones de estado.
 
 ## Fase 2: Entrada no interactiva
 

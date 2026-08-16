@@ -14,8 +14,10 @@ que indique si la cuenta puede iniciar la solicitud, si está bloqueada, si el
 token caducó o si la consulta terminó con error. Debe incluir el estado,
 detalle útil, marcas de tiempo y un identificador trazable del trabajo.
 
-El sistema no enviará la solicitud de desbloqueo. La misión termina después de
-determinar el permiso.
+El sistema puede enviar la solicitud remota de autorización mediante la API de
+Xiaomi cuando el estado de la cuenta lo permita. La misión termina después de
+esa solicitud y no incluye el desbloqueo físico posterior en el teléfono ni la
+ejecución de comandos `fastboot`.
 
 ## Usuarios objetivo
 
@@ -35,7 +37,7 @@ determinar el permiso.
 
 ## Fuera de alcance
 
-- Envío automático de solicitudes de desbloqueo.
-- Gestión de dispositivos físicos o ejecución de comandos fastboot.
+- Desbloqueo físico posterior en el teléfono.
+- Gestión de dispositivos físicos o ejecución de comandos `fastboot`.
 - Portal multiusuario o control de acceso de usuarios finales.
 - Extracción automática de tokens mediante Playwright en la primera entrega.

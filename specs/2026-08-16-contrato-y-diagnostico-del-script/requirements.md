@@ -27,7 +27,7 @@ larga duracion. El diagnostico se basa en `SCRIPT_PERMISO_DESBLOQUEO.py`,
 - Creacion o modificacion de workflows n8n o Data Table.
 - Construccion del contenedor, SSH, tmux o Docker Compose.
 - Extraccion de tokens mediante Playwright.
-- Envio de la solicitud de desbloqueo como automatizacion de negocio.
+- Desbloqueo físico posterior en el teléfono o ejecución de comandos `fastboot`.
 - Pruebas de integracion contra la API Xiaomi con tokens reales.
 
 ## Decisiones
@@ -39,7 +39,7 @@ larga duracion. El diagnostico se basa en `SCRIPT_PERMISO_DESBLOQUEO.py`,
 | D3 | Los estados persistentes seran `starting`, `running`, `success`, `failed`, `timeout` y `cancelled`. | Coincide con el contrato tecnico y permite que el monitor sobreviva a la perdida del proceso. | Inferir el estado unicamente desde el PID o el contenido del log. |
 | D4 | El limite inicial de referencia sera de 26 horas por trabajo y debera quedar configurable. | El script puede esperar hasta el siguiente dia en horario de Pekin; se reserva margen operativo. | Mantener un proceso sin limite o depender del timeout de SSH. |
 | D5 | Esta fase distingue respuestas observadas de respuestas confirmadas por documentacion oficial o pruebas controladas. | El script no contiene un contrato formal de la API y los valores pueden cambiar. | Tratar cualquier respuesta no reconocida como exito o permiso. |
-| D6 | La llamada a `apply/bl-auth` queda bloqueada como decision de producto antes de la implementacion. | La mision dice que el sistema no enviara la solicitud de desbloqueo, pero el script actual si la ejecuta. | Adaptar el flujo sin resolver la contradiccion. |
+| D6 | `apply/bl-auth` forma parte del flujo permitido: envía la solicitud remota de autorización. | La misión distingue la solicitud API del desbloqueo físico posterior en el teléfono. | Eliminar la llamada y limitar el sistema a una consulta de estado. |
 
 ## Contexto
 
@@ -146,9 +146,9 @@ garantia de la API.
 | `bl-switch/state`, `is_pass=4`, `button_state=2` | Bloqueado hasta `deadline_format`; hoy solicita confirmacion. | Resultado `permission_blocked`, sin interaccion en automatizacion. |
 | `bl-switch/state`, `is_pass=4`, `button_state=3` | Cuenta con menos de 30 dias; hoy solicita confirmacion. | Resultado `permission_blocked`, causa `account_too_new`. |
 | `bl-switch/state`, `is_pass=1` | Solicitud aprobada previamente. | Resultado `permission_available`, sujeto a confirmacion de negocio. |
-| `apply/bl-auth`, `code=0`, `apply_result=1` | Solicitud aprobada y luego verifica estado. | Fuera del alcance funcional hasta resolver D6. |
-| `apply/bl-auth`, `code=0`, `apply_result=3` | Limite alcanzado hasta una fecha. | Resultado candidato `permission_blocked`. |
-| `apply/bl-auth`, `code=0`, `apply_result=4` | Bloqueo hasta una fecha. | Resultado candidato `permission_blocked`. |
+| `apply/bl-auth`, `code=0`, `apply_result=1` | Solicitud aprobada y luego verifica estado. | Solicitud remota aceptada; después verificar `bl-switch/state`. |
+| `apply/bl-auth`, `code=0`, `apply_result=3` | Limite alcanzado hasta una fecha. | Resultado `permission_blocked`, con `deadline_format`. |
+| `apply/bl-auth`, `code=0`, `apply_result=4` | Bloqueo hasta una fecha. | Resultado `permission_blocked`, con `deadline_format`. |
 | `code=100001` | Peticion rechazada. | `failed`, causa `request_rejected`. |
 | `code=100003` | Puede haber sido aprobada; vuelve a verificar. | Respuesta ambigua; requiere consulta posterior acotada. |
 | Codigo desconocido, codigo ausente o JSON invalido | El script solo imprime el problema. | `failed`, causa `unknown_response` o `invalid_response`. |
@@ -161,8 +161,8 @@ garantia de la API.
 - **Fase 3**: Implementara `status.json`, estados, resultados, timeout y
   aislamiento de archivos por trabajo.
 - **Fase 4**: Convertira este diagnostico en pruebas locales del motor.
-- **`specs/mission.md`**: Define que el resultado es permiso y no el envio de
-  la solicitud de desbloqueo.
+- **`specs/mission.md`**: Permite la solicitud remota mediante la API, pero no
+  el desbloqueo físico posterior ni comandos `fastboot`.
 - **`specs/tech-stack.md`**: Define Python 3.12, ejecucion remota desacoplada,
   estados validos y referencia de 26 horas.
 
@@ -171,7 +171,7 @@ garantia de la API.
 | Riesgo | Mitigacion |
 |--------|------------|
 | La API Xiaomi puede cambiar codigos o campos sin aviso. | Conservar respuesta redactada, clasificar desconocidos como error y cubrir casos con pruebas controladas. |
-| El script actual ejecuta `apply/bl-auth`, contradiciendo la mision. | Resolver D6 y bloquear la implementacion hasta definir si esa llamada se elimina o se sustituye por una consulta. |
+| La solicitud remota mediante `apply/bl-auth` puede confundirse con el desbloqueo físico. | Mantener explícita la separación entre la llamada API y el desbloqueo posterior en el teléfono. |
 | Un bucle de reintento sin limite puede superar la duracion del contenedor. | Hacer configurable `timeout_at` y convertir su vencimiento en `timeout`. |
 | Los `input()` pueden bloquear un trabajo remoto indefinidamente. | Eliminar toda interaccion en Fase 2 y representar decisiones como estados/resultados. |
 | El token puede filtrarse en logs, errores o rutas. | Redactar logs, evitar el token en nombres de archivo y limitar su persistencia a los lugares estrictamente necesarios. |

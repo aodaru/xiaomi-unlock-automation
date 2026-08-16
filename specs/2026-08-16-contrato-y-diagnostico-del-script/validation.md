@@ -2,41 +2,41 @@
 
 ## Estado de la fase
 
-**⬜ PENDIENTE**
+**✅ COMPLETADA**
 
 ## Criterios de exito
 
 ### 1. Cobertura del diagnostico
 
-- [ ] El contrato documenta `token`, `timeshift` y `job_id`.
-- [ ] Se registran las lecturas interactivas y de archivos que existen hoy.
-- [ ] Se identifican las rutas actuales que usan `input()` y `exit()`.
-- [ ] Se documenta la discrepancia entre la mision y `apply/bl-auth`.
+- [x] El contrato documenta `token`, `timeshift` y `job_id`.
+- [x] Se registran las lecturas interactivas y de archivos que existen hoy.
+- [x] Se identifican las rutas actuales que usan `input()` y `exit()`.
+- [x] Se documenta la diferencia entre la solicitud API `apply/bl-auth` y el desbloqueo físico posterior.
 
 ### 2. Contrato de estado
 
-- [ ] `status.json` tiene esquema minimo, tipos, fechas, campos terminales y
+- [x] `status.json` tiene esquema minimo, tipos, fechas, campos terminales y
       reglas de escritura.
-- [ ] Se definen los seis estados validos y las transiciones permitidas.
-- [ ] Se define un limite por trabajo con referencia de 26 horas.
-- [ ] Se define la necesidad de aislar artefactos por `job_id`.
+- [x] Se definen los seis estados validos y las transiciones permitidas.
+- [x] Se define un limite por trabajo con referencia de 26 horas.
+- [x] Se define la necesidad de aislar artefactos por `job_id`.
 
 ### 3. Respuestas y errores
 
-- [ ] Se clasifican los codigos `100004`, `100001` y `100003`.
-- [ ] Se clasifican `is_pass`, `button_state`, `apply_result` y
+- [x] Se clasifican los codigos `100004`, `100001` y `100003`.
+- [x] Se clasifican `is_pass`, `button_state`, `apply_result` y
       `deadline_format`.
-- [ ] Se incluyen JSON invalido, respuesta vacia, error de red y respuesta
+- [x] Se incluyen JSON invalido, respuesta vacia, error de red y respuesta
       desconocida.
-- [ ] Cada categoria tiene un resultado o causa contractual provisional.
+- [x] Cada categoria tiene un resultado o causa contractual provisional.
 
 ### 4. Coherencia documental
 
-- [ ] La spec referencia y no contradice `specs/mission.md` ni
+- [x] La spec referencia y no contradice `specs/mission.md` ni
       `specs/tech-stack.md`.
-- [ ] El alcance no incluye implementacion de Python, Docker, n8n o
+- [x] El alcance no incluye implementacion de Python, Docker, n8n o
       Playwright.
-- [ ] Las decisiones pendientes y los riesgos tienen mitigacion o siguiente
+- [x] Las decisiones pendientes y los riesgos tienen mitigacion o siguiente
       fase asignada.
 
 ## Como verificar
@@ -61,9 +61,9 @@ Verificacion documental manual:
 
 - [ ] Todos los criterios marcados.
 - [ ] PR abierto.
-- [ ] Validacion manual ejecutada.
-- [ ] La contradiccion sobre `apply/bl-auth` resuelta o aceptada explicitamente
-      antes de comenzar la Fase 2.
+- [x] Validacion manual ejecutada.
+- [x] La decisión sobre `apply/bl-auth` queda resuelta: la solicitud API está
+      permitida y el desbloqueo físico posterior queda fuera del alcance.
 
 ## Anti-criterios (lo que NO debe pasar)
 
