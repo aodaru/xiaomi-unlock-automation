@@ -1,0 +1,7 @@
+token.txt
+build/.env
+__pycache__/
+*.py[cod]
+.opencode/node_modules/
+build/.config/tmux/plugins/
+.DS_Store

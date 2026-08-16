@@ -1,0 +1,16 @@
+services:
+  script:
+    build:
+      context: ..
+      dockerfile: build/Dockerfile
+    container_name: permiso-desbloqueo
+    env_file:
+      - .env
+    ports:
+      - "2223:22"
+    cap_add:
+      - NET_RAW
+    volumes:
+      - ../token.txt:/app/token.txt:ro
+      - ../timeshift.txt:/app/timeshift.txt:ro
+    restart: unless-stopped
