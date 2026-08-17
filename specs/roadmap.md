@@ -52,21 +52,21 @@ el apartado **Implementación por fases** del README como fuente de orden.
 
 ## Fase 6: Data Table y workflow lanzador
 
-- [ ] Definir las columnas de la Data Table.
-- [ ] Validar exactamente dos tokens de entrada.
-- [ ] Generar un `execution_id` y cuatro `job_id` únicos.
-- [ ] Crear una fila por cada trabajo.
-- [ ] Crear el directorio remoto de cada trabajo.
-- [ ] Lanzar los cuatro procesos por SSH sin bloquear n8n.
-- [ ] Guardar PID, rutas y estado `running`.
+- [x] Definir las columnas de la Data Table.
+- [x] Validar exactamente dos tokens de entrada.
+- [x] Generar un `execution_id` y cuatro `job_id` únicos.
+- [x] Crear una fila por cada trabajo.
+- [x] Crear el directorio remoto de cada trabajo.
+- [x] Lanzar los cuatro procesos por SSH sin bloquear n8n.
+- [x] Guardar PID, rutas y estado `running`.
 
 ## Fase 7: Workflow monitor
 
-- [ ] Configurar `Schedule Trigger` cada 1 o 5 minutos.
-- [ ] Seleccionar únicamente trabajos `running`.
-- [ ] Leer `status.json` y `output.log` por SSH.
-- [ ] Actualizar estado, resultado, error y fechas.
-- [ ] Detectar proceso perdido y superar `timeout_at`.
+- [x] Configurar `Schedule Trigger` cada 1 o 5 minutos.
+- [x] Seleccionar únicamente trabajos `running`.
+- [x] Leer `status.json` y `output.log` por SSH.
+- [x] Actualizar estado, resultado, error y fechas.
+- [x] Detectar proceso perdido y superar `timeout_at`.
 
 ## Fase 8: Resultados operativos
 
