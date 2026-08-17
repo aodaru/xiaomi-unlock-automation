@@ -70,10 +70,12 @@ el apartado **Implementación por fases** del README como fuente de orden.
 
 ## Fase 8: Resultados operativos
 
-- [ ] Definir la notificación al operador técnico.
-- [ ] Notificar resultado por token sin exponer el token completo.
-- [ ] Diferenciar éxito, permiso denegado, token caducado, timeout y error.
-- [ ] Registrar `last_checked_at` y evitar notificaciones duplicadas.
+- [x] Definir la notificación al operador técnico.
+- [x] Notificar resultado por token sin exponer el token completo.
+- [x] Diferenciar éxito, permiso denegado, token caducado, timeout y error.
+- [x] Registrar `last_checked_at` y evitar notificaciones duplicadas.
+      (D6: `last_checked_at` ya existe desde Fase 7; se interpreta como
+      `last_notified_at`, añadida en esta fase.)
 
 ## Fase 9: Resiliencia del ciclo completo
 

@@ -63,3 +63,125 @@ criterio de verificación.
 - `roadmap.md` Fase 7 con 5 items `[x]`, coherentes con la implementación verificada.
 - `validation.md` marca 3.4 como `[ ]` y el estado de fase como `EN PROGRESO`; los criterios de merge quedan pendientes — correcto.
 - `docs/phase-7-monitor.md` y README Fase 7 reflejan fielmente el workflow real.
+
+# Review — Fase 8 resultados operativos
+
+**Veredicto:** APPROVED
+
+Revisión independiente con MCP (`get_workflow_details` 16cYVCoO48LxBxl4,
+`get_workflow_history`, `search_data_tables`, `search_executions`,
+`get_execution` 8206-8215, `list_credentials`). No existen `init.sh`,
+`CHECKPOINTS.md`, `progress/current.md`, `docs/architecture.md` ni
+`docs/conventions.md` en este repo (documentado en la revisión de Fase 7); se
+aplica `validation.md` del spec como criterio de verificación.
+
+## Checkpoints
+
+- C1.1: [x] Workflow `Script Phase 8 Notifier` (id `16cYVCoO48LxBxl4`) existe,
+  `active: false`, `activeVersionId: null`, `triggerCount: 0` → INACTIVO (no publicado).
+- C1.2: [x] Schedule Trigger `Every 5 Minutes` (scheduleTrigger 1.3,
+  `minutesInterval: 5`, configurable a 1). Timezone del workflow: `UTC`
+  (settings), `executionOrder v1`, `executionTimeout 600`.
+- C1.3: [x] 5 nodos conectados en cadena única:
+  Trigger → Get Rows → Classify Result → Send Email → Update Row.
+- C1.4: [x] Credencial del canal existe: `Gmail account`
+  (`eN5CQPJBOkcyRCuw`, `gmailOAuth2`) en el proyecto del workflow. Adjunción al
+  nodo no verificable vía MCP (misma limitación que Fase 7) — confirmar en el
+  editor al activar.
+- C2.1: [x] Get Rows (dataTable 1.1 row/get, `returnAll: true`,
+  `matchType: allConditions`) filtra `state neq starting/running/cancelled/launch_failed`
+  AND `last_notified_at isEmpty` — funcionalmente idéntico a `state IN
+  (success,failed,timeout) AND last_notified_at IS NULL` para el dominio de
+  estados definido; divergencia técnica documentada (hallazgo 3).
+- C2.2: [x] Evidencia real (ejecución 8215): el filtro contra la tabla viva
+  devolvió 0 filas (las 9 heredadas de Fase 6/7 están `running` y quedan
+  excluidas) y el flujo terminó `success`.
+- C2.3: [x] Sin filas pendientes → workflow `success` sin envíos (Test 8, 8213).
+- C3.1-C3.5: [x] Clasificación verificada en ejecuciones reales:
+  - 8206 `success` → `notification_type=success`.
+  - 8207 `failed`+`token_expired`/`100004` → `token_expired` (D4: por
+    `state`+`result`/`error`, no solo `exit_code`).
+  - 8208 `failed`+`request_rejected`/`100001`/`is_pass=4` → `permission_denied`.
+  - 8209 `timeout` → `timeout` (`exit_code=40` conservado).
+  - 8210 `failed` causa desconocida → `error`.
+  - Causa nueva de API → cae en `error` conservando `result`/`error` redactados.
+- C4.1: [x] El mensaje identifica por `job_id` + máscara `****xxxx` basada en
+  `token_fingerprint` (columna real; divergencia con `token_hash` documentada en
+  doc e implementer-report, hallazgo 1).
+- C4.2: [x] Token completo nunca en notificación: el workflow solo recibe
+  `token_fingerprint` (SHA-256); la Data Table no tiene columna de token
+  completo (24 columnas verificadas en `search_data_tables`).
+- C4.3: [x] Test 7 (8212): cadenas base64 ≥40 en `result`/`error` → `[REDACTED]`
+  en body y campos; body contiene solo `Token: ****1e2f`.
+- C5.1: [x] Update Row (dataTable 1.1 row/update) matchea por `job_id`
+  (`$('Classify Result').item.json.job_id`) y escribe `last_notified_at`
+  (`new Date().toISOString()`, UTC) + `notified_result` (tipo).
+- C5.2: [x] Anti-duplicado en triple capa: filtro `isEmpty` + Code `return null`
+  si `last_notified_at` tiene valor (Test 6, 8211: 0 salidas, Gmail/Update no
+  ejecutan) + Update Row marca la fila.
+- C5.3: [x] Columnas existentes y con tipos correctos: `last_notified_at` (date,
+  id `YzqZC69bTkSk8IgM`, índice 22) y `notified_result` (string,
+  id `p1XVz5Dg36gAIPoY`, índice 23).
+- C6.1: [x] Nodo Gmail (gmail 2.2 message/send, oAuth2, sin contraseñas
+  embebidas) con `retryOnFail: true`, `maxTries: 3`,
+  `onError: continueRegularOutput` — un fallo del canal no bloquea el resto
+  (criterio 6).
+- C6.2: [x] Canal de salida aislado tras la lógica (sin lógica de negocio);
+  reemplazable por Telegram/Slack/webhook sin tocar los pasos 1-3/5.
+- C7.1-C7.8: [x] Tests 1-8 verificados en ejecuciones reales 8206-8213 (todas
+  `success`) + 8215 contra tabla viva. En todos, Update Row ejecutó `success`
+  sin match real (IDs sintéticos, esperado en sandbox).
+- R1: [x] `specs/roadmap.md` Fase 8 con los 4 items `[x]` (D6 documentado:
+  `last_checked_at` → `last_notified_at`).
+- R2: [x] `plan.md` Grupos 1-4 marcados; Grupo 5 (commit/push/PR/merge) sin
+  marcar — coherente con `git status` (sin commit de Fase 8).
+- R3: [x] `validation.md` en estado `🟡 EN PROGRESO`; criterios 1-7 marcados y
+  evidenciados; criterios de merge en `[ ]` — correcto.
+- R4: [x] `docs/phase-8-notifications.md` con el estilo de
+  `docs/phase-7-monitor.md` (recursos, columnas, flujo, configuración,
+  divergencias, pruebas, pendientes).
+- R5: [x] Working tree limpio de cambios fuera de alcance: solo
+  plan/validation/roadmap + 2 ficheros nuevos. El script Python, Docker
+  Compose, build/ y los workflows Fase 6/7 NO fueron modificados
+  (`git status --porcelain`).
+- R6: [x] `get_workflow_history`: 1 versión guardada (f5d3814f) creada por MCP,
+  con nombre y descripción coherentes.
+
+## Anti-criterios
+
+- ✅ Workflow NO activo/publicado: `active: false`, `activeVersionId: null`.
+- ✅ Token completo imposible de filtrar: el flujo nunca recibe el token; solo
+  `token_fingerprint` (hash); redacción defensiva en Code; Data Table sin token.
+- ✅ Sin duplicados: filtro + defensa Code + Update Row (evidencia 8211).
+- ✅ No procesa `starting`/`running`/`cancelled`: filtro `neq` + evidencia 8215.
+- ✅ Fallo del canal no bloquea: retry 3× + `continueRegularOutput`.
+- ✅ Fechas en UTC: timezone del workflow + `toISOString()`.
+- ✅ `last_notified_at`/`notified_result` escritos tras notificar.
+- ✅ Sin credenciales embebidas: Gmail OAuth2 vía credencial n8n.
+
+## Hallazgos (no bloqueantes)
+
+1. **Redacción defensiva (edge)**: el regex `[A-Za-z0-9+/]{40,}={0,2}` deja de
+   redactar un "token" cuyo contenido no sea base64 puro (guiones/puntos) en
+   fragmentos <40 chars. Riesgo teórico: la Data Table nunca almacena el token
+   completo (solo `token_fingerprint`) y el script/monitor Fase 7 ya redactan.
+   No bloquea la aprobación; refinar en Fase 9 si se desea.
+2. **Adjunción de credencial Gmail al nodo** no verificable vía MCP; confirmar
+   en el editor antes de activar (misma limitación que Fase 7, hallazgo 2).
+3. **`sendTo` por defecto `aodarug@gmail.com`** (propietario de la credencial):
+   documentado como configuración requerida previa a activar (decisión de líder).
+4. **`launch_failed` excluido** del alcance notificable (la spec solo contempla
+   success/failed/timeout); notificarlo exigiría quitar la condición `neq
+   launch_failed` — decisión de líder documentada (hallazgo 4 del reporte).
+5. **Escritura real pendiente**: Update Row validado en sandbox (IDs sintéticos
+   sin match); la escritura real contra filas terminales del launcher queda para
+   el ciclo real (Fase 9), igual que en Fase 7.
+
+## Notas de verificación
+
+- `git status`/`git log`: rama `feat/resultados-operativos`, sin commit de Fase 8
+  (coherente con plan Grupo 5 sin marcar). Cambios limitados a spec/docs.
+- Evidencias MCP: ejecuciones 8206-8215 `success`, outputs de `Classify Result`
+  y `Data Table Update Row` inspeccionados item por item.
+- `docs/phase-8-notifications.md` refleja fielmente el workflow real y las
+  divergencias (D1→Gmail, token_hash→token_fingerprint, filtro IN→neq/isEmpty).
