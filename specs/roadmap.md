@@ -34,13 +34,21 @@ el apartado **Implementación por fases** del README como fuente de orden.
 - [x] Probar error de red y respuestas inválidas.
 - [x] Probar finalización correcta y códigos de salida.
 
-## Fase 5: Contenedor reproducible
+## Fase 5: Contenedor reproducible y scripts FFmpeg
 
-- [ ] Fijar dependencias Python y revisar la instalación en build.
-- [ ] Construir la imagen con el script adaptado.
-- [ ] Verificar directorios persistentes y aislamiento de trabajos.
-- [ ] Verificar acceso SSH en el puerto `2223`.
-- [ ] Verificar lanzamiento manual en tmux y ejecución en segundo plano.
+- [ ] Consolidar en un único contenedor el motor Python, estados, artefactos,
+      FFmpeg y FFprobe.
+- [ ] Fijar dependencias Python y del procesamiento audiovisual.
+- [ ] Crear imagen ligera con usuario no root, OpenSSH y acceso exclusivamente
+      mediante claves.
+- [ ] Conectar la red externa `ix-internal-n8n-n8n-net` y montar
+      `/mnt/Aodnas/Docker/videos:/workspace/videos`, sin puertos publicados.
+- [ ] Verificar directorios persistentes, aislamiento de trabajos y estados.
+- [ ] Crear `video-tool` y los scripts `probe`, `prepare_video`, `extract_audio`,
+      `mix_audio` y `export_reel`.
+- [ ] Validar rutas, bloquear comandos arbitrarios y publicar salidas
+      atómicamente.
+- [ ] Documentar despliegue TrueNAS, SSH, n8n y pruebas con vídeo real.
 
 ## Fase 6: Data Table y workflow lanzador
 
