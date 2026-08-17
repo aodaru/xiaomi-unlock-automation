@@ -185,3 +185,203 @@ aplica `validation.md` del spec como criterio de verificación.
   y `Data Table Update Row` inspeccionados item por item.
 - `docs/phase-8-notifications.md` refleja fielmente el workflow real y las
   divergencias (D1→Gmail, token_hash→token_fingerprint, filtro IN→neq/isEmpty).
+
+# Review — Fase 8 cambio de canal Gmail → Telegram
+
+**Veredicto:** CHANGES_REQUESTED
+
+Revisión independiente con MCP (`get_workflow_details` 16cYVCoO48LxBxl4,
+`get_workflow_version` f5d3814f/5a2262b1/9554057f/ef4c9be2, `get_workflow_history`,
+`get_execution` 8299/8301, `search_executions`, `list_credentials`,
+`search_workflows`, `get_node_types` dataTable v1.1). No existen `init.sh`,
+`CHECKPOINTS.md`, `docs/architecture.md` ni `docs/conventions.md` en este repo
+(documentado en reviews previos); se aplica `validation.md` + criterios de esta
+review como fuente de verificación. `git status` coherente con el reporte:
+solo `docs/phase-8-notifications.md` y
+`specs/2026-08-17-resultados-operativos/implementer-report.md` modificados +
+`implementer-report-telegram.md` nuevo; sin tocar script Python, build/, ni
+workflows Fase 6/7.
+
+## Checkpoints
+
+- C1: [x] Canal Telegram configurado y publicación efectiva: nodo
+  `Send a text message` (`n8n-nodes-base.telegram` 1.2) con
+  `resource=message`, `operation=sendMessage`, `chatId=744884859`,
+  `text={{ $json.body }}`, `additionalFields.parse_mode=none`, credencial
+  `Telegram account` (`Z3r0YRo0ftwFvRYO`, `telegramApi`, en el proyecto
+  `lRQsCrsuKfh7kky6`). Workflow `active: true`, `activeVersionId` =
+  `ef4c9be2-4d7b-41c4-b681-b74809419260` (coincide con el reporte). Nodo
+  `Send Email Notification` (Gmail) **ausente** de nodos y conexiones.
+  Cadena única: Every 5 Minutes → Get Rows → Classify Result → Send a text
+  message → Update Row.
+- C2: [x] Nodo de salida aislado y reemplazable (D1 en espíritu): el nodo
+  Telegram solo tiene `chatId`/`text`/`parse_mode`, sin lógica de negocio.
+- C3: [x] Token completo nunca en el mensaje: `Classify Result` construye
+  `body` con `token_mask` (`****xxxx`); ejecución real **8301** (message_id
+  490) entregó `Token: ****b855` intacto (la huella completa
+  `9f86d0...8b855` nunca aparece); 8299 solo degradó la máscara por Markdown
+  (`****b855`→`b855`), sin exponer token completo. `parse_mode:none` resuelto
+  y verificado.
+- C4: [ ] **Anti-duplicados intactos (Update Row NO modificado)**: el filtro
+  Get Rows y el jsCode de `Classify Result` son byte-idénticos a la versión
+  aprobada `f5d3814f`, pero **`Data Table Update Row` SÍ difiere** en la
+  versión publicada: `columns.value` incluye `token_slot:0, timeshift:0,
+  exit_code:0, check_count:0` (ausentes en `f5d3814f`). La definición del
+  nodo (`get_node_types` dataTable v1.1 row/update) confirma que
+  `columns.value` es el mapa de columnas a escribir: al notificar una fila
+  terminal REAL, el nodo escribiría `exit_code=0` (10/30/40 → 0),
+  `check_count=0`, `token_slot=0` y `timeshift=0`, corrompiendo la auditoría
+  (contrato Fase 1 exige conservar `exit_code`). Origen: ya estaba en el
+  draft autosave `5a2262b1` (21:06, previo a las ops MCP de esta tarea) y se
+  publicó tal cual en `ef4c9be2`; no lo introdujo esta tarea, pero viaja en
+  la versión activa. El mecanismo anti-duplicado en sí (filtro isEmpty +
+  defensa Code + escritura `last_notified_at`) sigue funcionando.
+- C5: [x] Tolerancia a fallos en el nodo Telegram: `retryOnFail: true`,
+  `maxTries: 3`, `onError: continueRegularOutput`.
+- C6: [x] Settings globales intactos: `timezone UTC`, `executionOrder v1`,
+  `executionTimeout 600` (verificados en `ef4c9be2`); Schedule Trigger
+  `Every 5 Minutes` intacto; ejecución programada 8302 (trigger, tras
+  publicar) terminó `success`.
+- C7: [ ] Documentación coherente con el workflow real: el canal Telegram,
+  chatId, credencial, divergencias D1/`sendTo` y tests 9-10 están bien
+  documentados en `docs/phase-8-notifications.md`, pero el paso 5 sigue
+  describiendo Update Row escribiendo solo `last_notified_at` +
+  `notified_result` (línea 35), mientras el nodo real escribe además
+  `token_slot/timeshift/exit_code/check_count = 0`. Ningún doc menciona
+  estas escrituras extra.
+- C8: [x] Divergencia D1 (SMTP→Gmail→Telegram) documentada con racional
+  (tabla de divergencias + "Cambio posterior" en doc e implementer-reports).
+- C9: [x] No se recreó el workflow ni se cambió su ID (`16cYVCoO48LxBxl4`);
+  no se tocaron script Python, Docker Compose/build ni workflows Fase 6/7
+  (`git status --porcelain`).
+
+## Hallazgo bloqueante (detalle)
+
+`Data Table Update Row` (`id fc8b5700-a4e3-434a-8d18-b96a1587882e`, dataTable
+1.1, `position [1440,304]`) en la versión activa `ef4c9be2` tiene:
+
+```json
+"columns": {
+  "mappingMode": "defineBelow",
+  "value": {
+    "last_notified_at": "={{ $('Classify Result').item.json.last_notified_at }}",
+    "notified_result": "={{ $('Classify Result').item.json.notified_result }}",
+    "token_slot": 0,
+    "timeshift": 0,
+    "exit_code": 0,
+    "check_count": 0
+  },
+  ...
+}
+```
+
+Frente a la versión aprobada `f5d3814f` (solo `last_notified_at` +
+`notified_result`). Con `mappingMode: defineBelow` todas las claves de
+`value` se escriben. Riesgo: la primera fila terminal real notificada perderá
+`exit_code` y `check_count` (reseteados a 0), degradando el contrato de
+auditoría. No hay evidencia en vivo (8301 no matcheó filas reales, `main:[[]]`).
+
+## Remediación solicitada (mínima)
+
+1. `update_workflow` → `updateNodeParameters` sobre `Data Table Update Row`
+   restaurando `columns.value` a solo `last_notified_at` + `notified_result`
+   (igual que `f5d3814f`), o documentar/justificar explícitamente las 4
+   escrituras extra.
+2. Validar (`validate_workflow`), republicar y actualizar
+   `docs/phase-8-notifications.md` paso 5 si aplica.
+3. Re-revisar tras el cambio.
+
+## Notas de verificación
+
+- El canal Telegram, credencial y chatId están correctos y verificados con
+  envío real (8301: `ok:true`, message_id 490, bot `TeaPartyDev_bot` id
+  8378951561, chat privado `Aodaru` 744884859).
+- `chatId=744884859` corroborado por el workflow activo `Brute Force -
+  Reporte Diario` (`Send to Telegram`, telegram 1.2, chatId 744884859) y la
+  existencia de `AsisVirtual Telegram Bot` (ambos activos).
+- Ejecuciones 8299 y 8301: `success`; 8302 (trigger automático posterior a la
+  publicación): `success`.
+
+# Re-review tras corrección C4 — Fase 8 cambio de canal Gmail → Telegram
+
+**Veredicto:** APPROVED
+
+Re-verificación independiente con MCP (`get_workflow_details` 16cYVCoO48LxBxl4,
+`get_workflow_history`, `search_executions`, `list_credentials`). No existen
+`init.sh`, `CHECKPOINTS.md`, `progress/`, `docs/architecture.md` ni
+`docs/conventions.md` en este repo (documentado en reviews previos); se aplican
+los criterios C1-C9 de la review anterior como fuente de verificación.
+`git status --porcelain`: solo `changelog.md`, `docs/phase-8-notifications.md`,
+`specs/2026-08-17-resultados-operativos/implementer-report.md` (modificados) +
+`implementer-report-telegram.md` (nuevo); `build/`, `SCRIPT_PERMISO_DESBLOQUEO.py`
+y Compose intactos (sin salida en el porcelain de esos paths).
+
+## Checkpoints
+
+- C1: [x] Canal Telegram configurado, Gmail eliminado, workflow activo con versión corregida:
+  `active: true`, `activeVersionId` = **`5afef109-0c5a-49c5-9abf-466e3a9df8ff`**
+  (coincide con el reporte; `versionId` del draft = activo, `triggerCount: 1`).
+  Nodo `Send a text message` (`ad6379a0-...`, telegram 1.2) con `chatId=744884859`,
+  `text={{ $json.body }}`, `parse_mode=none`, `resource/operation=message/sendMessage`.
+  Credencial `Telegram account` (`Z3r0YRo0ftwFvRYO`, `telegramApi`) existe en el
+  home project `lRQsCrsuKfh7kky6` (`list_credentials`). Nodo Gmail ausente
+  (5 nodos, sin `Send Email Notification`). Cadena única de conexiones:
+  Every 5 Minutes → Get Rows → Classify Result → Send a text message → Update Row.
+- C2: [x] Nodo de salida aislado y reemplazable: el nodo Telegram solo tiene
+  `chatId`/`text`/`parse_mode`, sin lógica de negocio.
+- C3: [x] Token completo nunca en el mensaje: `body` construido en `Classify Result`
+  con `token_mask` (`****xxxx`); verificado en las ejecuciones reales 8299/8301
+  (review previa) y el jsCode intacto (redacción defensiva `[REDACTED]`).
+- C4: [x] **Anti-duplicados + auditoría restaurados**: `Data Table Update Row`
+  (`fc8b5700-a4e3-434a-8d18-b96a1587882e`) en versión activa tiene
+  `columns.value` con SOLO `last_notified_at` + `notified_result`
+  (`mappingMode: defineBelow`). **Ausentes** `token_slot`, `timeshift`, `exit_code`
+  y `check_count` (regla dura verificada). Filtro Get Rows y jsCode de
+  `Classify Result` intactos; `filters` del Update Row (match por `job_id`) y
+  `matchingColumns` intactos. Comportamiento idéntico a la versión aprobada `f5d3814f`.
+- C5: [x] Tolerancia a fallos en el nodo Telegram: `retryOnFail: true`,
+  `maxTries: 3`, `onError: continueRegularOutput`.
+- C6: [x] Settings globales intactos: `timezone UTC`, `executionOrder v1`,
+  `executionTimeout 600`; Schedule Trigger `Every 5 Minutes` intacto.
+- C7: [x] Documentación coherente: `docs/phase-8-notifications.md` paso 5 documenta
+  "escribiendo **solo** `last_notified_at` y `notified_result`" con nota explícita
+  del 2026-08-17 sobre la eliminación de las escrituras extra del autosave;
+  `implementer-report-telegram.md` sección "Corrección post-review (C4 bloqueante)"
+  (línea ~119) documenta la remediación y la nueva versión publicada.
+- C8: [x] Divergencia D1 (SMTP→Gmail→Telegram) documentada con racional en doc y
+  reportes (tabla de divergencias + "Cambio posterior").
+- C9: [x] No se recreó el workflow ni se cambió su ID (`16cYVCoO48LxBxl4`); no se
+  tocaron script Python, Docker Compose/build ni workflows Fase 6/7
+  (`git status --porcelain`).
+
+## Evidencia de la corrección
+
+- `get_workflow_history`: última versión **`5afef109-0c5a-49c5-9abf-466e3a9df8ff`**
+  ("Fix Update Row (solo last_notified_at+notified_result)", descripción = C4,
+  autosaved: false, 2026-08-17T21:20:44Z), posterior a `ef4c9be2` (canal Telegram)
+  y a `5a2262b1` (autosave contaminado).
+- `get_workflow_details`: `columns.value` corregido idéntico en draft y
+  `activeVersion` (ambos con solo los 2 campos).
+- Ejecuciones recientes: 8302/8306 (trigger) y 8299/8301 (manual) todas `success`.
+  Nota: 8306 (21:20:01Z) corrió instantes antes de la publicación (21:20:44Z), por
+  lo que aún no hay ejecución sobre la versión corregida; la siguiente corrida
+  programada (21:25) la cubre. No bloquea: la configuración del nodo está verificada
+  en vivo en la versión activa.
+
+## Hallazgos no bloqueantes
+
+1. Sin ejecución post-corrección aún (la corrección se publicó 21:20:44Z; la
+   siguiente corrida del trigger lo confirmará). Verificado estructuralmente en
+   `get_workflow_details`/`activeVersion`.
+2. Adjunción de la credencial Telegram al nodo no visible vía MCP (misma
+   limitación que reviews previos); la credencial existe en el proyecto correcto.
+3. Permanece pendiente (Fase 9, no de esta review) la escritura real de
+   `last_notified_at`/`notified_result` contra una fila terminal real del launcher.
+
+## Notas de verificación
+
+- `git status`/`git log`: rama `main` con commits `8f99ccd` y anteriores; sin commit
+  de esta corrección (coherente con el reporte: "Sin commit/push/PR").
+- `docs/phase-8-notifications.md` refleja el workflow real (paso 4 Telegram, paso 5
+  restaurado a solo 2 campos) y `implementer-report-telegram.md` documenta la
+  corrección C4 con versión y evidencia.

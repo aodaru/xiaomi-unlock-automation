@@ -73,3 +73,19 @@ En todos los tests el nodo `Data Table Update Row` ejecutó con `success` (con `
 1. Confirmar el email real del operador para `sendTo` (por defecto `aodarug@gmail.com`).
 2. Decidir si `launch_failed` debe notificarse en una fase posterior (hoy queda excluido).
 3. Autorizar la activación del workflow (requiere ciclo real launcher→monitor→notifier contra el contenedor, Fase 9).
+
+## Cambio posterior: notificación por Telegram (2026-08-17)
+
+El canal de notificación del workflow `Script Phase 8 Notifier` (`16cYVCoO48LxBxl4`) pasó de **Gmail a Telegram**. Detalle completo: `specs/2026-08-17-resultados-operativos/implementer-report-telegram.md`.
+
+Resumen:
+
+- Nodo de salida: `Send a text message` (`n8n-nodes-base.telegram` 1.2, `resource=message`, `operation=sendMessage`), conectado `Classify Result` → Telegram → `Data Table Update Row` (conexión ya existente en el draft).
+- Credencial: `Telegram account` (`Z3r0YRo0ftwFvRYO`, `telegramApi`) → bot `TeaPartyDev_bot` (id 8378951561).
+- `chatId`: `744884859` (chat privado del operador `Aodaru`; mismo chat de los workflows activos `Brute Force - Reporte Diario` y `AsisVirtual Telegram Bot`; confirmado con envío real).
+- `text` = `={{ $json.body }}`; `additionalFields.parse_mode = none` (texto plano).
+- Eliminado el nodo huérfano `Send Email Notification` (Gmail).
+- Tolerancia del canal intacta: `retryOnFail: true`, `maxTries: 3`, `onError: continueRegularOutput`.
+- Pruebas reales: ejecuciones **8299** (message_id 489, `ok: true`, chat 744884859) y **8301** (message_id 490, texto plano con máscara `****b855` intacta). Hallazgo intermedio: el parse mode por defecto degradaba la máscara (`****b855`→`b855`) y los guiones bajos; corregido con `parse_mode: none`.
+- Publicado: versión activa `ef4c9be2-4d7b-41c4-b681-b74809419260` (workflow seguía activo; sin cambios de settings globales).
+- Nodos intocados: `Every 5 Minutes`, `Data Table Get Rows`, `Classify Result`, `Data Table Update Row`. Sin commit/push/PR.
