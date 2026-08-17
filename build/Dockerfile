@@ -5,19 +5,24 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssh-server tmux iputils-ping ca-certificates \
+    && apt-get install -y --no-install-recommends ffmpeg openssh-server tmux ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir requests ntplib pytz urllib3 icmplib colorama \
-    && mkdir -p /run/sshd /app \
+    && mkdir -p /run/sshd /app /workspace/jobs /workspace/videos /usr/local/lib/video-tool \
     && chmod 0755 /run/sshd
+
+COPY build/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 
 COPY SCRIPT_PERMISO_DESBLOQUEO.py /app/SCRIPT_PERMISO_DESBLOQUEO.py
 COPY build/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-COPY build/.config/tmux /opt/tmux-config/.config/tmux
+COPY build/video-tool.py build/video-tool build/probe build/prepare_video build/extract_audio \
+     build/mix_audio build/export_reel /usr/local/lib/video-tool/
 
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh /usr/local/lib/video-tool/* \
+    && useradd --create-home --shell /bin/bash operator \
+    && chown -R operator:operator /app /workspace
 
 WORKDIR /app
-EXPOSE 22
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

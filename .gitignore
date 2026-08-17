@@ -1,5 +1,7 @@
 token.txt
 build/.env
+build/authorized_keys
+build/data/
 __pycache__/
 *.py[cod]
 .opencode/node_modules/
