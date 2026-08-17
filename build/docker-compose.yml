@@ -1,24 +1,17 @@
 services:
   script:
-    build:
-      context: ..
-      dockerfile: build/Dockerfile
-    container_name: permiso-desbloqueo
+    image: udocker
+    pull_policy: never
     environment:
       SSH_USER: operator
       SSH_AUTHORIZED_KEYS_FILE: /run/secrets/authorized_keys
     volumes:
-      - ./data/jobs:/workspace/jobs
-      - /mnt/Aodnas/Docker/videos:/workspace/videos
-    secrets:
-      - authorized_keys
+      - /mnt/Aodnas/Docker/utils-docker/jobs:/workspace/jobs
+      - /mnt/Aodnas/Docker/utils-docker/videos:/workspace/videos
+      - /mnt/Aodnas/Docker/utils-docker/build/authorized_keys:/run/secrets/authorized_keys:ro
     networks:
       - ix-internal-n8n-n8n-net
     restart: unless-stopped
-
-secrets:
-  authorized_keys:
-    file: ./authorized_keys
 
 networks:
   ix-internal-n8n-n8n-net:

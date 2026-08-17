@@ -20,8 +20,12 @@ COPY build/video-tool.py build/video-tool build/probe build/prepare_video build/
      build/mix_audio build/export_reel /usr/local/lib/video-tool/
 
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh /usr/local/lib/video-tool/* \
-    && useradd --create-home --shell /bin/bash operator \
-    && chown -R operator:operator /app /workspace
+      && id operator >/dev/null 2>&1 && userdel operator || true \
+      && getent group operator >/dev/null && groupdel operator || true \
+      && groupadd -g 568 operator \
+      && useradd -u 568 -g operator --create-home --shell /bin/bash operator \
+      && usermod --unlock operator && passwd -d operator \
+      && chown -R operator:operator /app /workspace
 
 WORKDIR /app
 
