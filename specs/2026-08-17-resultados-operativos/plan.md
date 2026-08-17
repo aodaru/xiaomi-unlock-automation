@@ -59,10 +59,10 @@ Marcar checkboxes al ejecutar.
 
 ## Grupo 5: Documentación y merge
 
-- [ ] Crear `docs/phase-8-notifications.md`
-- [ ] Marcar items de Fase 8 en `specs/roadmap.md`
-- [ ] Commit de todos los cambios
-- [ ] Push de la rama
-- [ ] Crear PR
-- [ ] Validar criterios de éxito
-- [ ] Mergear y limpiar
+- [x] Crear `docs/phase-8-notifications.md`
+- [x] Marcar items de Fase 8 en `specs/roadmap.md`
+- [x] Commit de todos los cambios
+- [x] Push de la rama
+- [x] Crear PR
+- [x] Validar criterios de éxito
+- [x] Mergear y limpiar
