@@ -118,11 +118,48 @@ video-tool export_reel finales/mezcla.mp4 reels/salida.mp4
 `probe`, `prepare_video`, `extract_audio`, `mix_audio` y `export_reel` son
 también wrappers independientes para invocación remota por SSH.
 
+## Fase 6: workflow lanzador y Data Table
+
+El workflow n8n `Script Phase 6 Launcher` recibe un `POST` con exactamente dos
+tokens y `timeshift`. Genera un `execution_id`, cuatro `job_id` aleatorios y
+crea cuatro filas en la Data Table `script_job_launches`. Cada fila conserva la
+huella SHA-256 del token, estado, rutas aisladas, PID y fechas, pero nunca el
+token completo.
+
+El lanzamiento remoto usa el nodo SSH con una credencial de clave privada
+gestionada por n8n. Cada proceso se ejecuta en una sesión `tmux` desacoplada y
+solo pasa a `running` después de confirmar el directorio y `process.pid`. Los
+errores individuales quedan como `launch_failed`; no se borran filas ni se
+simulan resultados finales.
+
+Detalles del contrato y configuración: `docs/phase-6-launcher.md`.
+
+## Fase 7: workflow monitor
+
+El workflow n8n `Script Phase 7 Monitor` se ejecuta cada 5 minutos
+(configurable a 1 minuto) y consulta la Data Table `script_job_launches`
+filtrando `state = 'running'`. Por cada trabajo ejecuta un único comando SSH
+que lee `status.json`, las últimas 100 líneas de `output.log` y el marcador de
+PID (`alive` / `lost` / `no_pid`), y actualiza la fila con `state`, `result`,
+`error`, `exit_code`, `finished_at`, `timeout_at`, `updated_at`,
+`last_checked_at` y `check_count`.
+
+Detecta el límite operativo comparando `now > timeout_at` en UTC (`timeout`,
+`exit_code = 40`) y el proceso perdido cuando el PID de `process.pid` no
+responde a `kill -0` (`failed`, `exit_code = 30`, error `process_lost`). Si el
+`status.json` es ilegible, mantiene el trabajo `running` con un error
+transitorio `status_unreadable`. Los trabajos ya terminales (`success`,
+`failed`, `timeout`) no se re-procesan porque el filtro de consulta solo
+selecciona `running`.
+
+Detalles del contrato y configuración: `docs/phase-7-monitor.md`.
+
 ## Arquitectura prevista
 
-n8n recibirá los secretos, generará un `job_id` por trabajo y lanzará este CLI
-por SSH. El contenedor y el lanzamiento remoto se abordarán en la Fase 5; el
-workflow y el monitor se abordarán en las fases 6 y 7.
+n8n recibe los secretos, genera trabajos aislados y lanza este CLI por SSH. El
+contenedor está en la Fase 5, el workflow lanzador en la Fase 6 y el workflow
+monitor en la Fase 7. La notificación de resultados al operador pertenece a la
+Fase 8.
 
 ## Verificación local
 
