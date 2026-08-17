@@ -4,13 +4,22 @@ services:
       context: ..
       dockerfile: build/Dockerfile
     container_name: permiso-desbloqueo
-    env_file:
-      - .env
-    ports:
-      - "2223:22"
-    cap_add:
-      - NET_RAW
+    environment:
+      SSH_USER: operator
+      SSH_AUTHORIZED_KEYS_FILE: /run/secrets/authorized_keys
     volumes:
-      - ../token.txt:/app/token.txt:ro
-      - ../timeshift.txt:/app/timeshift.txt:ro
+      - ./data/jobs:/workspace/jobs
+      - /mnt/Aodnas/Docker/videos:/workspace/videos
+    secrets:
+      - authorized_keys
+    networks:
+      - ix-internal-n8n-n8n-net
     restart: unless-stopped
+
+secrets:
+  authorized_keys:
+    file: ./authorized_keys
+
+networks:
+  ix-internal-n8n-n8n-net:
+    external: true

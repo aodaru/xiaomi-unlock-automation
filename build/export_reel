@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec video-tool export_reel "$@"

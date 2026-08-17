@@ -83,6 +83,41 @@ Esta entrega elimina toda interacción humana y las dependencias de archivos
 compartidos. No implementa n8n, Docker, SSH/tmux ni Playwright; esos elementos
 pertenecen a fases posteriores.
 
+## Fase 5: contenedor y vídeo
+
+El despliegue reproducible está en `build/`. Construye Python 3.12, FFmpeg,
+FFprobe, OpenSSH y tmux en una única imagen. El servicio no publica puertos:
+n8n debe acceder a él mediante la red Docker externa
+`ix-internal-n8n-n8n-net` y el nombre `script`.
+
+Antes de arrancar, crea `build/authorized_keys` con una o más claves públicas y
+asegura que el usuario del contenedor pueda escribir en
+`/mnt/Aodnas/Docker/videos` y en `build/data/jobs`. Las contraseñas SSH están
+deshabilitadas y `build/authorized_keys` queda fuera de Git.
+
+```bash
+docker network create ix-internal-n8n-n8n-net
+mkdir -p build/data/jobs
+docker compose -f build/docker-compose.yml build
+docker compose -f build/docker-compose.yml up -d
+```
+
+El CLI del motor conserva `--work-dir /workspace/jobs`. La herramienta
+`video-tool` solo acepta rutas dentro de `/workspace/videos`, no ejecuta
+comandos proporcionados por el usuario y publica cada archivo mediante un
+temporal en el mismo directorio seguido de `rename` atómico:
+
+```bash
+video-tool probe entrada.mp4
+video-tool prepare_video entrada.mp4 preparados/salida.mp4
+video-tool extract_audio entrada.mp4 audio/salida.mp3
+video-tool mix_audio preparados/salida.mp4 audio/salida.mp3 finales/mezcla.mp4
+video-tool export_reel finales/mezcla.mp4 reels/salida.mp4
+```
+
+`probe`, `prepare_video`, `extract_audio`, `mix_audio` y `export_reel` son
+también wrappers independientes para invocación remota por SSH.
+
 ## Arquitectura prevista
 
 n8n recibirá los secretos, generará un `job_id` por trabajo y lanzará este CLI
